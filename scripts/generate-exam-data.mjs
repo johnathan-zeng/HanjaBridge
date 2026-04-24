@@ -8,6 +8,7 @@ const topikFiles = [1, 2, 3, 4, 5, 6].map((level) => ({
   path: `/tmp/topik-level-${level}.html`
 }));
 const topikFrequencyPath = new URL("../data/topik-6000.csv", import.meta.url);
+const topikEnglishFiles = [1, 2, 3, 4, 5, 6].map((part) => new URL(`../data/eohwi-6000/${part}.js`, import.meta.url));
 
 function decodeHtml(value) {
   return value
@@ -25,6 +26,10 @@ function slug(value) {
     .toLowerCase()
     .replace(/[^a-z0-9가-힣一-龥]+/g, "-")
     .replace(/^-+|-+$/g, "");
+}
+
+function normalizeForKey(value) {
+  return String(value || "").toLowerCase().replace(/\s+/g, " ").trim();
 }
 
 function parseTopik(html, level) {
@@ -121,6 +126,57 @@ function parseTopikFrequency(csv) {
     });
 }
 
+function parseTopikEnglish(js) {
+  const definitions = new Map();
+  const pattern = /word_set1_arr\[idx\]\.push\('([\s\S]*?)'\);\s*word_set2_arr\[idx\]\.push\('([\s\S]*?)'\);/g;
+  for (const match of js.matchAll(pattern)) {
+    const english = decodeHtml(match[1]).replace(/\\'/g, "'").trim();
+    const korean = decodeHtml(match[2]).replace(/\\'/g, "'").trim();
+    if (korean && english && !definitions.has(korean)) {
+      definitions.set(korean, english);
+    }
+  }
+  return definitions;
+}
+
+async function loadTopikEnglish() {
+  const definitions = new Map();
+  for (const file of topikEnglishFiles) {
+    try {
+      const partDefinitions = parseTopikEnglish(await readFile(file, "utf8"));
+      for (const [korean, english] of partDefinitions) {
+        if (!definitions.has(korean)) definitions.set(korean, english);
+      }
+    } catch {
+      // Keep generation usable if an optional source file is missing.
+    }
+  }
+  return definitions;
+}
+
+function withTopikEnglish(entry, definitions) {
+  const english = definitions.get(entry.korean);
+  if (!english) return null;
+  return {
+    ...entry,
+    english,
+    bridge: entry.hanja
+      ? "Korean frequency/TOPIK-prep entry with English definition and Hanja from imported sources."
+      : "Korean frequency/TOPIK-prep entry with English definition. CN/Hanja link is optional and pending.",
+    tags: entry.tags.filter((tag) => tag !== "korean-only").concat("KO/EN")
+  };
+}
+
+function dedupeEntries(items, keyFor) {
+  const seen = new Set();
+  return items.filter((item) => {
+    const key = keyFor(item);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 function hskLevelTags(levels) {
   return levels
     .filter((level) => /^n[1-7]$/.test(level))
@@ -196,8 +252,17 @@ for (const file of topikFiles) {
 
 try {
   const topikFrequencyCsv = await readFile(topikFrequencyPath, "utf8");
+  const topikEnglish = await loadTopikEnglish();
   const seenKorean = new Set(topikEntries.map((entry) => entry.korean));
-  topikEntries.push(...parseTopikFrequency(topikFrequencyCsv).filter((entry) => !seenKorean.has(entry.korean)));
+  topikEntries.push(
+    ...dedupeEntries(
+      parseTopikFrequency(topikFrequencyCsv)
+      .filter((entry) => !seenKorean.has(entry.korean))
+      .map((entry) => withTopikEnglish(entry, topikEnglish))
+      .filter(Boolean),
+      (entry) => `${normalizeForKey(entry.korean)}|${normalizeForKey(entry.english)}|${normalizeForKey(entry.hanja)}`
+    )
+  );
 } catch {
   topikEntries.push({
     id: "topik-6000-unavailable",

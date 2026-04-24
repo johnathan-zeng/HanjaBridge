@@ -186,6 +186,7 @@ const state = {
   collectionIds: null,
   activeDeck: "all",
   activeTrack: "all",
+  chineseScript: localStorage.getItem("bridgeLexiconChineseScript") || "simplified",
   review: null,
   saved: new Set(JSON.parse(localStorage.getItem("bridgeLexiconSaved") || "[]")),
   srs: JSON.parse(localStorage.getItem("bridgeLexiconSrs") || "{}"),
@@ -196,6 +197,7 @@ const elements = {
   tabs: document.querySelectorAll(".tab"),
   views: document.querySelectorAll(".view"),
   searchInput: document.querySelector("#searchInput"),
+  scriptButtons: document.querySelectorAll(".script-button"),
   entryList: document.querySelector("#entryList"),
   entryPage: document.querySelector("#entryPage"),
   resultCount: document.querySelector("#resultCount"),
@@ -216,11 +218,18 @@ function normalize(value) {
 }
 
 function primaryText(entry) {
-  return entry.korean || entry.simplified || entry.hanja || entry.english;
+  if (entry.source === "hsk") return chineseText(entry) || entry.english;
+  return entry.korean || chineseText(entry) || entry.english;
 }
 
-function scriptText(entry) {
-  return [entry.hanja, entry.simplified].filter(Boolean).join(" / ");
+function chineseText(entry) {
+  if (state.chineseScript === "traditional") return entry.hanja || entry.simplified || "";
+  return entry.simplified || entry.hanja || "";
+}
+
+function characterChineseText(character) {
+  if (state.chineseScript === "traditional") return character.char || character.simplified || "";
+  return character.simplified || character.char || "";
 }
 
 function readingText(entry) {
@@ -235,6 +244,10 @@ function sourceText(entry) {
 }
 
 function sourceDetailText(entry) {
+  if (entry.source === "topik-frequency") {
+    const rankTag = entry.tags.find((tag) => tag.startsWith("frequency "));
+    return rankTag ? `Korean 6000 frequency #${rankTag.replace("frequency ", "")}` : "Korean 6000 frequency";
+  }
   return entry.sourceLabel || sourceText(entry);
 }
 
@@ -244,7 +257,7 @@ function enText(entry) {
 }
 
 function cnText(entry) {
-  return scriptText(entry) || "中文待补";
+  return chineseText(entry) || "中文待补";
 }
 
 function koText(entry) {
@@ -264,7 +277,7 @@ function languageGrid(entry) {
   return `
     <div class="language-grid">
       <div><span>EN</span><strong>${item.en}</strong></div>
-      <div><span>CN</span><strong class="script-text">${item.cn}</strong></div>
+      <div><span>CN ${state.chineseScript === "traditional" ? "繁" : "简"}</span><strong class="script-text">${item.cn}</strong></div>
       <div><span>KO</span><strong>${item.ko}</strong></div>
     </div>
   `;
@@ -321,6 +334,11 @@ function saveState() {
   localStorage.setItem("bridgeLexiconSaved", JSON.stringify([...state.saved]));
   localStorage.setItem("bridgeLexiconSrs", JSON.stringify(state.srs));
   localStorage.setItem("bridgeLexiconReviewed", String(state.reviewed));
+  localStorage.setItem("bridgeLexiconChineseScript", state.chineseScript);
+}
+
+function savePreferences() {
+  localStorage.setItem("bridgeLexiconChineseScript", state.chineseScript);
 }
 
 function dueEntries() {
@@ -336,6 +354,10 @@ function deckEntries(deckId = state.activeDeck) {
   return entries.filter((entry) => deck.filter(entry, state));
 }
 
+function studyableEntries(deckId = state.activeDeck) {
+  return deckEntries(deckId).filter((entry) => enText(entry) !== "EN pending" && (koText(entry) !== "한국어 보완 필요" || cnText(entry) !== "中文待补"));
+}
+
 function visibleDecks() {
   if (state.activeTrack === "all") return decks;
   return decks.filter((deck) => deck.track === state.activeTrack || deck.id === "all");
@@ -345,6 +367,12 @@ function renderStats() {
   elements.savedCount.textContent = state.saved.size;
   elements.dueCount.textContent = dueEntries().length;
   elements.reviewedCount.textContent = state.reviewed;
+}
+
+function renderScriptToggle() {
+  elements.scriptButtons.forEach((button) => {
+    button.classList.toggle("active", button.dataset.script === state.chineseScript);
+  });
 }
 
 function renderEntryList() {
@@ -372,7 +400,7 @@ function renderEntryPage() {
         <p class="eyebrow">EN / CN / KO entry</p>
         <div class="word-title">
           <strong>${primaryText(entry)}</strong>
-          <span>${scriptText(entry) || sourceText(entry)}</span>
+          <span>${chineseText(entry) || sourceText(entry)}</span>
         </div>
         <p class="bridge-line">${[readingText(entry), sourceDetailText(entry)].filter(Boolean).join(" · ")}</p>
       </div>
@@ -413,12 +441,13 @@ function renderEntryPage() {
 function characterCard(character) {
   return `
     <article class="character-card">
-      <div class="character-glyph">${character.char}</div>
+      <div class="character-glyph">${characterChineseText(character)}</div>
       <div>
         <strong>CN ${character.pinyin || "pinyin pending"} · KO ${character.koreanSound || "음 pending"} · EN ${character.meaning || "meaning pending"}</strong>
-        <p>KO ${character.koreanMeaning || "훈 pending"} · CN ${character.simplified || character.char}</p>
+        <p>KO ${character.koreanMeaning || "훈 pending"} · CN ${characterChineseText(character)}</p>
         <dl>
-          <dt>Variant</dt><dd>${character.simplified} · ${character.variants}</dd>
+          <dt>Script</dt><dd>${state.chineseScript === "traditional" ? "Traditional / 繁體" : "Simplified / 简体"}</dd>
+          <dt>Variant</dt><dd>${state.chineseScript === "traditional" ? character.simplified || character.variants || "None" : character.variants || character.char || "None"}</dd>
           <dt>Radical</dt><dd>${character.radical}</dd>
           <dt>Strokes</dt><dd>${character.strokes}</dd>
           <dt>Grade</dt><dd>${character.grade}</dd>
@@ -436,7 +465,7 @@ function renderDecks() {
 
   const shownDecks = visibleDecks();
   elements.deckList.innerHTML = shownDecks.map((deck) => {
-    const count = deckEntries(deck.id).length;
+    const count = studyableEntries(deck.id).length;
     return `
       <button class="deck-button ${deck.id === state.activeDeck ? "active" : ""}" type="button" data-deck="${deck.id}">
         <span>
@@ -453,7 +482,7 @@ function renderDecks() {
 }
 
 function makeReviewQuestion() {
-  const activeDeckEntries = deckEntries();
+  const activeDeckEntries = studyableEntries();
   const activeIds = new Set(activeDeckEntries.map((entry) => entry.id));
   const due = dueEntries().filter((entry) => activeIds.has(entry.id));
   const pool = due.length ? due : activeDeckEntries;
@@ -464,41 +493,69 @@ function makeReviewQuestion() {
   }
 
   const entry = pool[Math.floor(Math.random() * pool.length)] || entries[0];
-  const modes = ["meaning"];
-  if (entry.english === "Meaning not imported yet") modes.pop();
-  if (readingText(entry)) modes.push("reading");
-  if (scriptText(entry)) modes.push("character");
-  if (!modes.length) modes.push("recognition");
-  const mode = modes[Math.floor(Math.random() * modes.length)];
-
-  state.review = { entry, mode, answered: false };
+  state.review = { entry, mode: Math.random() > 0.5 ? "toEnglish" : "fromEnglish", answered: false };
   renderReview();
 }
 
+function studyFace(entry) {
+  if (entry.source === "hsk" || !entry.korean) return cnText(entry);
+  return koText(entry);
+}
+
+function studyLanguageLabel(entry) {
+  if (entry.source === "hsk" || !entry.korean) return "CN / 中文 / 중국어";
+  return "KO / 한국어 / Korean";
+}
+
+function studyBadge(entry) {
+  if (entry.source === "hsk") {
+    const level = (entry.decks.find((deck) => deck.startsWith("hsk-new-")) || "").replace("hsk-new-", "");
+    const displayLevel = level === "7-9" ? "7-9" : level || "?";
+    return {
+      kind: "Chinese",
+      label: `Chinese · HSK 3.0 L${displayLevel}`,
+      sublabel: `CN deck / 汉语 / 중국어`
+    };
+  }
+
+  const sampleLevel = (entry.decks.find((deck) => /^topik-\d$/.test(deck)) || "").replace("topik-", "");
+  if (sampleLevel) {
+    return {
+      kind: "Korean",
+      label: `Korean · TOPIK ${sampleLevel}`,
+      sublabel: "KO deck / 韩语 / 한국어"
+    };
+  }
+
+  const rankTag = entry.tags.find((tag) => tag.startsWith("frequency "));
+  const rank = rankTag ? ` #${rankTag.replace("frequency ", "")}` : "";
+  return {
+    kind: "Korean",
+    label: `Korean · TOPIK 6000${rank}`,
+    sublabel: "Frequency list / 频率 / 빈도"
+  };
+}
+
 function reviewPrompt(review) {
-  if (review.mode === "reading") return `Reading / 读音 / 발음: ${scriptText(review.entry) || primaryText(review.entry)}`;
-  if (review.mode === "character") return `CN characters / 汉字 / 한자: ${enText(review.entry)}`;
-  if (review.mode === "recognition") return `${review.entry.source === "hsk" ? "CN word / 中文 / 중국어" : "KO word / 韩语 / 한국어"}: ${sourceText(review.entry)}`;
-  return `EN meaning / 英文 / 영어: ${primaryText(review.entry)}`;
+  if (review.mode === "fromEnglish") {
+    return `Choose ${studyLanguageLabel(review.entry)} for EN / 选择词语 / 단어 고르기.`;
+  }
+  return `Choose EN / 选择英文 / 영어 뜻 고르기 for ${studyLanguageLabel(review.entry)}.`;
 }
 
 function reviewFace(review) {
-  if (review.mode === "character") return primaryText(review.entry);
-  if (review.mode === "recognition") return review.entry.source === "hsk" ? cnText(review.entry) : koText(review.entry);
-  if (review.mode === "reading") return scriptText(review.entry) || primaryText(review.entry);
-  return scriptText(review.entry) || primaryText(review.entry);
+  if (review.mode === "fromEnglish") return enText(review.entry);
+  return studyFace(review.entry);
 }
 
 function reviewAnswer(entry, mode) {
-  if (mode === "reading") return readingText(entry);
-  if (mode === "character") return scriptText(entry);
-  if (mode === "recognition") return primaryText(entry);
+  if (mode === "fromEnglish") return studyFace(entry);
   return entry.english;
 }
 
 function reviewOptions(review) {
   const answer = reviewAnswer(review.entry, review.mode);
-  const wrong = entries
+  const wrong = studyableEntries()
     .filter((entry) => entry.id !== review.entry.id)
     .map((entry) => reviewAnswer(entry, review.mode))
     .filter(Boolean)
@@ -515,21 +572,32 @@ function renderReview() {
     return;
   }
 
+  const symbolClass = review.mode === "fromEnglish" ? "english-face" : "cjk-face";
+  const optionClass = review.mode === "fromEnglish" ? "cjk-option" : "english-option";
+  const badge = studyBadge(review.entry);
+
   elements.reviewCard.innerHTML = `
     <div class="review-top">
-      <div class="review-symbol">${reviewFace(review)}</div>
+      <div class="review-badge ${badge.kind.toLowerCase()}">
+        <strong>${badge.label}</strong>
+        <span>${badge.sublabel}</span>
+      </div>
+      <div class="review-symbol ${symbolClass}">${reviewFace(review)}</div>
       <p>${reviewPrompt(review)}</p>
     </div>
     <div class="quiz-options">
-      ${reviewOptions(review).map((option) => `
-        <button class="quiz-option" type="button" data-answer="${option}">${option}</button>
+      ${reviewOptions(review).map((option, index) => `
+        <button class="quiz-option ${optionClass}" type="button" data-answer="${option}">
+          <span class="shortcut-key">${index + 1}</span>
+          <span>${option}</span>
+        </button>
       `).join("")}
     </div>
     <p class="feedback" id="reviewFeedback" aria-live="polite"></p>
     <div class="answer-actions" id="ratingActions" hidden>
-      <button class="rating-button again" type="button" data-rating="again">Again</button>
-      <button class="rating-button" type="button" data-rating="hard">Hard</button>
-      <button class="rating-button good" type="button" data-rating="good">Good</button>
+      <button class="rating-button again" type="button" data-rating="again"><span class="shortcut-key">A</span><span>Again</span></button>
+      <button class="rating-button" type="button" data-rating="hard"><span class="shortcut-key">H</span><span>Hard</span></button>
+      <button class="rating-button good" type="button" data-rating="good"><span class="shortcut-key">G</span><span>Good</span></button>
     </div>
   `;
 }
@@ -576,6 +644,36 @@ function rateReview(rating) {
   saveState();
   renderStats();
   makeReviewQuestion();
+}
+
+function studyViewActive() {
+  return document.querySelector("#studyView")?.classList.contains("active");
+}
+
+function handleStudyShortcut(event) {
+  if (!studyViewActive() || event.metaKey || event.ctrlKey || event.altKey) return;
+  const target = event.target;
+  if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target?.isContentEditable) return;
+
+  const key = event.key.toLowerCase();
+  if (!state.review?.answered && ["1", "2", "3", "4"].includes(key)) {
+    const options = [...document.querySelectorAll(".quiz-option")];
+    const option = options[Number(key) - 1];
+    if (option && !option.disabled) {
+      event.preventDefault();
+      answerReview(option);
+    }
+    return;
+  }
+
+  if (state.review?.answered) {
+    const ratingByKey = { a: "again", h: "hard", g: "good" };
+    const rating = ratingByKey[key];
+    if (rating) {
+      event.preventDefault();
+      rateReview(rating);
+    }
+  }
 }
 
 function collectionDefinitions() {
@@ -651,6 +749,7 @@ function renderCollections() {
 }
 
 function renderAll() {
+  renderScriptToggle();
   renderStats();
   renderEntryList();
   renderEntryPage();
@@ -670,6 +769,7 @@ document.addEventListener("click", (event) => {
   const saveButton = event.target.closest("[data-save]");
   const deckButton = event.target.closest("[data-deck]");
   const trackButton = event.target.closest("[data-track]");
+  const scriptButton = event.target.closest("[data-script]");
   const answerButton = event.target.closest("[data-answer]");
   const ratingButton = event.target.closest("[data-rating]");
   const collectionButton = event.target.closest("[data-collection]");
@@ -707,6 +807,13 @@ document.addEventListener("click", (event) => {
     makeReviewQuestion();
   }
 
+  if (scriptButton) {
+    state.chineseScript = scriptButton.dataset.script;
+    savePreferences();
+    renderAll();
+    if (state.review) renderReview();
+  }
+
   if (answerButton) answerReview(answerButton);
   if (ratingButton) rateReview(ratingButton.dataset.rating);
 
@@ -720,6 +827,8 @@ document.addEventListener("click", (event) => {
     renderAll();
   }
 });
+
+document.addEventListener("keydown", handleStudyShortcut);
 
 elements.searchInput.addEventListener("input", (event) => {
   state.collectionIds = null;
