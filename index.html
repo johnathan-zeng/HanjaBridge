@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Bridge Lexicon</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <main class="app-shell">
+      <aside class="sidebar" aria-label="Main navigation">
+        <div class="brand">
+          <span class="brand-mark" aria-hidden="true">橋</span>
+          <div>
+            <h1>Bridge Lexicon</h1>
+            <p>EN / CN / KO language bridge</p>
+          </div>
+        </div>
+
+        <nav class="mode-tabs" aria-label="Modules">
+          <button class="tab active" data-view="dictionary" type="button">Dictionary / 词典 / 사전</button>
+          <button class="tab" data-view="study" type="button">Study / 学习 / 학습</button>
+          <button class="tab" data-view="collections" type="button">Collections / 词库 / 모음</button>
+        </nav>
+
+        <section class="progress-panel" aria-label="Study progress">
+          <div>
+            <span class="eyebrow">Due / 到期 / 복습</span>
+            <strong id="dueCount">0</strong>
+          </div>
+          <div>
+            <span class="eyebrow">Saved / 收藏 / 저장</span>
+            <strong id="savedCount">0</strong>
+          </div>
+          <div>
+            <span class="eyebrow">Reviewed / 已复习 / 완료</span>
+            <strong id="reviewedCount">0</strong>
+          </div>
+        </section>
+      </aside>
+
+      <section class="workspace">
+        <section class="view active" id="dictionaryView" aria-labelledby="dictionaryTitle">
+          <div class="toolbar">
+            <div>
+              <p class="eyebrow">EN / CN / KO dictionary</p>
+              <h2 id="dictionaryTitle">Look up across English, Chinese, and Korean.</h2>
+            </div>
+            <label class="search-box">
+              <span aria-hidden="true">⌕</span>
+              <input id="searchInput" type="search" autocomplete="off" placeholder="EN school · CN 学校 xue · KO 학교">
+            </label>
+          </div>
+
+          <div class="dictionary-layout">
+            <section class="results-panel" aria-label="Dictionary results">
+              <div class="panel-heading">
+                <h3>Entries / 词条 / 항목</h3>
+                <span id="resultCount"></span>
+              </div>
+              <div class="entry-list" id="entryList"></div>
+            </section>
+
+            <article class="entry-page" id="entryPage" aria-live="polite"></article>
+          </div>
+        </section>
+
+        <section class="view" id="studyView" aria-labelledby="studyTitle">
+          <div class="toolbar">
+            <div>
+              <p class="eyebrow">Study / 学习 / 학습</p>
+              <h2 id="studyTitle">Review EN, CN, and KO cards together.</h2>
+            </div>
+            <button class="icon-button" id="newQuestionButton" type="button" title="New question">↻</button>
+          </div>
+
+          <div class="study-grid">
+            <article class="review-card" id="reviewCard"></article>
+            <section class="deck-panel" aria-label="Study decks">
+              <div class="panel-heading">
+                <h3>Decks / 卡组 / 덱</h3>
+                <span id="activeDeckLabel">All cards</span>
+              </div>
+              <div class="study-track-tabs" aria-label="Study tracks">
+                <button class="track-button active" data-track="all" type="button">All</button>
+                <button class="track-button" data-track="topik" type="button">TOPIK</button>
+                <button class="track-button" data-track="hsk" type="button">HSK</button>
+                <button class="track-button" data-track="saved" type="button">Saved</button>
+              </div>
+              <div class="deck-list" id="deckList"></div>
+            </section>
+          </div>
+        </section>
+
+        <section class="view" id="collectionsView" aria-labelledby="collectionsTitle">
+          <div class="toolbar">
+            <div>
+              <p class="eyebrow">Collections / 词库 / 모음</p>
+              <h2 id="collectionsTitle">Browse EN/CN/KO decks by exam, grade, radical, and frequency.</h2>
+            </div>
+            <button class="text-button" id="clearSavedButton" type="button">Clear / 清空 / 지우기</button>
+          </div>
+
+          <div class="collection-grid" id="collectionGrid"></div>
+        </section>
+      </section>
+    </main>
+
+    <script src="data/exam-data.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>
