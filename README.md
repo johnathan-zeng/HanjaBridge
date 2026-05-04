@@ -16,9 +16,12 @@ CN or KO cross-links are enrichment, not required for a study card.
 Keyboard shortcuts in Study:
 
 - `1`-`4`: choose an answer option
-- `A`: Again
-- `H`: Hard
-- `G`: Good
+- `1`: Again
+- `4`: Hard
+- `5`: Good
+- `6`: Easy
+
+The SRS interval is Anki-like: Again returns immediately, Hard advances slowly, Good advances normally, and Easy pushes the card farther out. Collections can hide confident cards, currently defined as cards rated Easy or cards with an interval of at least 14 days.
 
 Study cards show an explicit language/exam badge, such as `Korean · TOPIK 6000` or `Chinese · HSK 3.0 L2`, so Hanja/Hanzi is not treated as an ambiguous shared label.
 

@@ -229,6 +229,13 @@ h1 {
   margin-bottom: 24px;
 }
 
+.toolbar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
 .eyebrow {
   display: block;
   margin-bottom: 6px;
@@ -634,7 +641,8 @@ h3 {
 }
 
 .quiz-option.correct,
-.rating-button.good {
+.rating-button.good,
+.rating-button.easy {
   border-color: rgba(31, 122, 91, 0.35);
   background: #e8f3ed;
   color: #115d42;
@@ -656,6 +664,13 @@ h3 {
 .text-button {
   min-height: 44px;
   padding: 0 14px;
+}
+
+.text-button.active {
+  border-color: rgba(31, 122, 91, 0.34);
+  background: #e8f3ed;
+  color: #115d42;
+  font-weight: 760;
 }
 
 .collection-grid {

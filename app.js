@@ -187,6 +187,7 @@ const state = {
   activeDeck: "all",
   activeTrack: "all",
   chineseScript: localStorage.getItem("bridgeLexiconChineseScript") || "simplified",
+  hideConfident: localStorage.getItem("bridgeLexiconHideConfident") === "true",
   review: null,
   saved: new Set(JSON.parse(localStorage.getItem("bridgeLexiconSaved") || "[]")),
   srs: JSON.parse(localStorage.getItem("bridgeLexiconSrs") || "{}"),
@@ -210,7 +211,8 @@ const elements = {
   trackButtons: document.querySelectorAll(".track-button"),
   newQuestionButton: document.querySelector("#newQuestionButton"),
   collectionGrid: document.querySelector("#collectionGrid"),
-  clearSavedButton: document.querySelector("#clearSavedButton")
+  clearSavedButton: document.querySelector("#clearSavedButton"),
+  hideConfidentButton: document.querySelector("#hideConfidentButton")
 };
 
 function normalize(value) {
@@ -339,6 +341,7 @@ function saveState() {
 
 function savePreferences() {
   localStorage.setItem("bridgeLexiconChineseScript", state.chineseScript);
+  localStorage.setItem("bridgeLexiconHideConfident", String(state.hideConfident));
 }
 
 function dueEntries() {
@@ -347,6 +350,16 @@ function dueEntries() {
     if (!state.saved.has(entry.id)) return false;
     return !state.srs[entry.id] || state.srs[entry.id].due <= now;
   });
+}
+
+function isConfident(entry) {
+  const card = state.srs[entry.id];
+  return Boolean(card && (card.interval >= 14 || card.lastRating === "easy"));
+}
+
+function visibleCollectionEntries(collectionEntries) {
+  if (!state.hideConfident) return collectionEntries;
+  return collectionEntries.filter((entry) => !isConfident(entry));
 }
 
 function deckEntries(deckId = state.activeDeck) {
@@ -373,6 +386,13 @@ function renderScriptToggle() {
   elements.scriptButtons.forEach((button) => {
     button.classList.toggle("active", button.dataset.script === state.chineseScript);
   });
+}
+
+function renderCollectionControls() {
+  elements.hideConfidentButton.classList.toggle("active", state.hideConfident);
+  elements.hideConfidentButton.textContent = state.hideConfident
+    ? "Showing unknown"
+    : "Hide confident";
 }
 
 function renderEntryList() {
@@ -595,9 +615,10 @@ function renderReview() {
     </div>
     <p class="feedback" id="reviewFeedback" aria-live="polite"></p>
     <div class="answer-actions" id="ratingActions" hidden>
-      <button class="rating-button again" type="button" data-rating="again"><span class="shortcut-key">A</span><span>Again</span></button>
-      <button class="rating-button" type="button" data-rating="hard"><span class="shortcut-key">H</span><span>Hard</span></button>
-      <button class="rating-button good" type="button" data-rating="good"><span class="shortcut-key">G</span><span>Good</span></button>
+      <button class="rating-button again" type="button" data-rating="again"><span class="shortcut-key">1</span><span>Again</span></button>
+      <button class="rating-button" type="button" data-rating="hard"><span class="shortcut-key">4</span><span>Hard</span></button>
+      <button class="rating-button good" type="button" data-rating="good"><span class="shortcut-key">5</span><span>Good</span></button>
+      <button class="rating-button easy" type="button" data-rating="easy"><span class="shortcut-key">6</span><span>Easy</span></button>
     </div>
   `;
 }
@@ -632,8 +653,13 @@ function rateReview(rating) {
   if (!state.review) return;
 
   const current = state.srs[state.review.entry.id] || { interval: 0 };
-  const nextInterval = rating === "again" ? 0 : rating === "hard" ? Math.max(1, current.interval + 1) : Math.max(2, current.interval * 2 || 3);
-  const dueDays = rating === "again" ? 0 : nextInterval;
+  const nextInterval = {
+    again: 0,
+    hard: Math.max(1, Math.round((current.interval || 0) * 1.2) || 1),
+    good: Math.max(3, Math.round((current.interval || 1) * 2.5)),
+    easy: Math.max(7, Math.round((current.interval || 2) * 4))
+  }[rating] ?? 1;
+  const dueDays = nextInterval;
 
   state.srs[state.review.entry.id] = {
     interval: nextInterval,
@@ -667,7 +693,7 @@ function handleStudyShortcut(event) {
   }
 
   if (state.review?.answered) {
-    const ratingByKey = { a: "again", h: "hard", g: "good" };
+    const ratingByKey = { "1": "again", "4": "hard", "5": "good", "6": "easy", a: "again", h: "hard", g: "good", e: "easy" };
     const rating = ratingByKey[key];
     if (rating) {
       event.preventDefault();
@@ -678,7 +704,6 @@ function handleStudyShortcut(event) {
 
 function collectionDefinitions() {
   const byDeck = (deckId) => entries.filter((entry) => entry.decks.includes(deckId));
-  const byCharacter = (predicate) => entries.filter((entry) => entry.characters.some(predicate));
 
   return [
     { title: "Saved / 收藏 / 저장", description: "Your custom EN/CN/KO deck from dictionary saves and reviews.", entries: entries.filter((entry) => state.saved.has(entry.id)) },
@@ -707,20 +732,6 @@ function collectionDefinitions() {
       { label: "HSK 5", entries: byDeck("hsk-new-5") },
       { label: "HSK 6", entries: byDeck("hsk-new-6") },
       { label: "HSK 7-9", entries: byDeck("hsk-new-7-9") }
-    ] },
-    { title: "Hanja grade / 汉字等级 / 한자 급수", description: "Grade roots that recur across Korean vocabulary.", groups: [
-      { label: "8급", entries: byCharacter((character) => character.grade === "8급") },
-      { label: "7급 range", entries: byCharacter((character) => character.grade.includes("7급")) },
-      { label: "5급+", entries: byCharacter((character) => character.grade.includes("5급") || character.grade.includes("4급")) }
-    ] },
-    { title: "Radicals / 部首 / 부수", description: "Character families by radical.", groups: [
-      { label: "子", entries: byCharacter((character) => character.radical === "子") },
-      { label: "日 / 門", entries: byCharacter((character) => ["日", "門"].includes(character.radical)) },
-      { label: "心 / 水", entries: byCharacter((character) => ["心", "水"].includes(character.radical)) }
-    ] },
-    { title: "Frequency / 频率 / 빈도", description: "High-frequency roots are the best bridge material.", groups: [
-      { label: "High / 高 / 높음", entries: byCharacter((character) => character.frequency === "high") },
-      { label: "Medium / 中 / 보통", entries: byCharacter((character) => character.frequency === "medium") }
     ] }
   ];
 }
@@ -728,12 +739,24 @@ function collectionDefinitions() {
 function renderCollections() {
   elements.collectionGrid.innerHTML = collectionDefinitions().map((collection) => {
     const groups = collection.groups || [{ label: collection.title, entries: collection.entries }];
+    const visibleGroups = groups
+      .map((group) => ({ ...group, entries: visibleCollectionEntries(group.entries) }))
+      .filter((group) => group.entries.length);
+    if (!visibleGroups.length) {
+      return `
+        <section class="collection-card">
+          <h3>${collection.title}</h3>
+          <p>${collection.description}</p>
+          <p class="empty-state">No visible cards / 暂无显示 / 표시할 카드가 없습니다</p>
+        </section>
+      `;
+    }
     return `
       <section class="collection-card">
         <h3>${collection.title}</h3>
         <p>${collection.description}</p>
         <div class="collection-list">
-          ${groups.map((group) => `
+          ${visibleGroups.map((group) => `
             <button class="collection-link" type="button" data-collection="${group.label}" data-entry-ids="${group.entries.map((entry) => entry.id).join(",")}">
               <span>
                 <strong>${group.label}</strong>
@@ -750,6 +773,7 @@ function renderCollections() {
 
 function renderAll() {
   renderScriptToggle();
+  renderCollectionControls();
   renderStats();
   renderEntryList();
   renderEntryPage();
@@ -846,6 +870,12 @@ elements.clearSavedButton.addEventListener("click", () => {
   state.saved.clear();
   state.srs = {};
   saveState();
+  renderAll();
+});
+
+elements.hideConfidentButton.addEventListener("click", () => {
+  state.hideConfident = !state.hideConfident;
+  savePreferences();
   renderAll();
 });
 
