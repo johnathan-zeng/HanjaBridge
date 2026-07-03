@@ -576,7 +576,7 @@ function reviewAnswer(entry, mode) {
 function reviewOptions(review) {
   const answer = reviewAnswer(review.entry, review.mode);
   const wrong = studyableEntries()
-    .filter((entry) => entry.id !== review.entry.id)
+    .filter((entry) => entry.id !== review.entry.id && entry.decks.some((d) => review.entry.decks.includes(d)))
     .map((entry) => reviewAnswer(entry, review.mode))
     .filter(Boolean)
     .filter((value, index, list) => list.indexOf(value) === index)
@@ -629,7 +629,6 @@ function answerReview(button) {
   const expected = reviewAnswer(state.review.entry, state.review.mode);
   const correct = button.dataset.answer === expected;
   state.review.answered = true;
-  state.saved.add(state.review.entry.id);
   state.review.correct = correct;
   state.reviewed += 1;
 
@@ -652,6 +651,7 @@ function answerReview(button) {
 function rateReview(rating) {
   if (!state.review) return;
 
+  state.saved.add(state.review.entry.id);
   const current = state.srs[state.review.entry.id] || { interval: 0 };
   const nextInterval = {
     again: 0,
