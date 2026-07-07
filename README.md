@@ -44,7 +44,7 @@ The generator expects the MyTOPIK level pages to be downloaded to `/tmp/topik-le
 
 This is a static site. GitHub Pages can serve it directly from the repository root: `index.html`, `styles.css`, `app.js`, and `data/exam-data.js`.
 
-Deployment caveat: `data/exam-data.js` is about 7.4 MB, so first load will be heavier than a production app with lazy-loaded datasets or a backend search index.
+Deployment caveat: `data/exam-data.js` is about 7.4 MB uncompressed (roughly 0.6 MB gzipped, which is what GitHub Pages actually serves), so first load will still be heavier than a production app with lazy-loaded datasets or a backend search index. A loading indicator covers the gap between page load and the data finishing parse.
 
 Open `index.html` in a browser. No install step is required.
 

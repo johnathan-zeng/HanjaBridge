@@ -82,7 +82,7 @@ function parseCsvLine(line) {
   return values;
 }
 
-function parseTopikFrequency(csv) {
+function parseTopikFrequency(csv, hskCharIndex) {
   return csv
     .split(/\r?\n/)
     .slice(1)
@@ -93,6 +93,24 @@ function parseTopikFrequency(csv) {
       const band = Math.min(6, Math.ceil(rank / 1000));
       const hasHanja = /[一-龥]/.test(hanja || "");
 
+      const characters = hasHanja ? [...hanja].filter((char) => /[一-龥]/.test(char)).map((char) => {
+        const match = hskCharIndex.get(char);
+        return {
+          char,
+          simplified: match?.simplified || "",
+          koreanSound: "",
+          koreanMeaning: "",
+          pinyin: match?.pinyin || "",
+          meaning: match?.meaning || "",
+          radical: match?.radical || "",
+          strokes: "",
+          grade: "",
+          frequency: match?.frequency || "",
+          variants: ""
+        };
+      }) : [];
+      const allMatched = characters.length > 0 && characters.every((char) => char.pinyin);
+
       return {
         id: `topik-6000-${rank}-${slug(korean)}`,
         source: "topik-frequency",
@@ -101,27 +119,15 @@ function parseTopikFrequency(csv) {
         koreanReading: "",
         english: "Meaning not imported yet",
         hanja: hasHanja ? hanja : "",
-        simplified: "",
-        pinyin: "",
+        simplified: allMatched ? characters.map((char) => char.simplified).join("") : "",
+        pinyin: allMatched ? characters.map((char) => char.pinyin).join(" ") : "",
         bridge: hasHanja
           ? "Korean frequency/TOPIK-prep entry with Hanja from the imported 6000-word sheet."
           : "Korean frequency/TOPIK-prep entry without a confirmed Hanja or Chinese equivalent.",
         decks: ["topik-6000", `topik-frequency-${band}`],
         tags: ["TOPIK 6000", `frequency ${rank}`, `band ${band}`, hasHanja ? "has hanja" : "korean-only"],
         examples: [],
-        characters: hasHanja ? [...hanja].filter((char) => /[一-龥]/.test(char)).map((char) => ({
-          char,
-          simplified: "",
-          koreanSound: "",
-          koreanMeaning: "",
-          pinyin: "",
-          meaning: "",
-          radical: "",
-          strokes: "",
-          grade: "",
-          frequency: rank,
-          variants: ""
-        })) : []
+        characters
       };
     });
 }
@@ -156,13 +162,25 @@ async function loadTopikEnglish() {
 
 function withTopikEnglish(entry, definitions) {
   const english = definitions.get(entry.korean);
-  if (!english) return null;
+  const hasCharacterData = entry.characters.length > 0 && entry.characters.every((char) => char.pinyin);
+  if (!english) {
+    return {
+      ...entry,
+      bridge: hasCharacterData
+        ? "Korean frequency/TOPIK-prep entry with Hanja and a character breakdown cross-referenced from HSK data. English definition pending."
+        : entry.hanja
+          ? "Korean frequency/TOPIK-prep entry with Hanja from imported sources. English definition pending."
+          : "Korean frequency/TOPIK-prep entry without a confirmed Hanja, Chinese equivalent, or English definition."
+    };
+  }
   return {
     ...entry,
     english,
-    bridge: entry.hanja
-      ? "Korean frequency/TOPIK-prep entry with English definition and Hanja from imported sources."
-      : "Korean frequency/TOPIK-prep entry with English definition. CN/Hanja link is optional and pending.",
+    bridge: hasCharacterData
+      ? "Korean frequency/TOPIK-prep entry with English definition, Hanja, and a character breakdown cross-referenced from HSK data."
+      : entry.hanja
+        ? "Korean frequency/TOPIK-prep entry with English definition and Hanja from imported sources."
+        : "Korean frequency/TOPIK-prep entry with English definition. CN/Hanja link is optional and pending.",
     tags: entry.tags.filter((tag) => tag !== "korean-only").concat("KO/EN")
   };
 }
@@ -181,6 +199,37 @@ function hskLevelTags(levels) {
   return levels
     .filter((level) => /^n[1-7]$/.test(level))
     .map((level) => level === "n7" ? "hsk-new-7-9" : `hsk-new-${level.slice(1)}`);
+}
+
+function frequencyBucket(rank) {
+  if (!rank) return "";
+  if (rank <= 1500) return "high";
+  if (rank <= 4000) return "medium";
+  return "low";
+}
+
+function bestForm(item) {
+  const forms = item.f || [];
+  return forms.find((form) => !/^surname /i.test(form.m?.[0] || "")) || forms[0] || {};
+}
+
+function buildHskCharIndex(items) {
+  const index = new Map();
+  for (const item of items) {
+    if ([...item.s].length !== 1) continue;
+    const form = bestForm(item);
+    const entry = {
+      simplified: item.s,
+      traditional: form.t || item.s,
+      pinyin: form.i?.n || form.i?.y || "",
+      meaning: form.m?.[0] || "",
+      radical: item.r || "",
+      frequency: frequencyBucket(item.q)
+    };
+    if (!index.has(entry.traditional)) index.set(entry.traditional, entry);
+    if (!index.has(entry.simplified)) index.set(entry.simplified, entry);
+  }
+  return index;
 }
 
 function parseHsk(items) {
@@ -218,12 +267,15 @@ function parseHsk(items) {
           radical: item.r || "",
           strokes: "",
           grade: "",
-          frequency: item.q || "",
+          frequency: frequencyBucket(item.q),
           variants: form.t && form.t !== item.s ? item.s : ""
         }] : []
       };
     });
 }
+
+const hskRaw = JSON.parse(await readFile(hskPath, "utf8"));
+const hskCharIndex = buildHskCharIndex(hskRaw);
 
 const topikEntries = [];
 for (const file of topikFiles) {
@@ -256,7 +308,7 @@ try {
   const seenKorean = new Set(topikEntries.map((entry) => entry.korean));
   topikEntries.push(
     ...dedupeEntries(
-      parseTopikFrequency(topikFrequencyCsv)
+      parseTopikFrequency(topikFrequencyCsv, hskCharIndex)
       .filter((entry) => !seenKorean.has(entry.korean))
       .map((entry) => withTopikEnglish(entry, topikEnglish))
       .filter(Boolean),
@@ -282,7 +334,7 @@ try {
   });
 }
 
-const hskEntries = parseHsk(JSON.parse(await readFile(hskPath, "utf8")));
+const hskEntries = parseHsk(hskRaw);
 const payload = {
   generatedAt: new Date().toISOString(),
   sources: {

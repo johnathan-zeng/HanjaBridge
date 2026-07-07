@@ -55,6 +55,33 @@ p {
   min-height: 100vh;
 }
 
+.app-loading {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  background: var(--paper);
+}
+
+.app-loading .brand-mark {
+  display: grid;
+  width: 58px;
+  height: 58px;
+  place-items: center;
+  border: 1px solid var(--line);
+  background: var(--ink);
+  color: var(--paper);
+  font-size: 1.6rem;
+}
+
+.app-loading p {
+  color: var(--muted);
+}
+
 .sidebar {
   display: flex;
   flex-direction: column;
@@ -695,6 +722,12 @@ h3 {
   color: var(--muted);
 }
 
+.pending-value {
+  color: var(--muted);
+  font-style: italic;
+  font-weight: 500;
+}
+
 @media (max-width: 1040px) {
   .app-shell,
   .dictionary-layout,
@@ -734,8 +767,6 @@ h3 {
     align-items: stretch;
   }
 
-  .mode-tabs,
-  .progress-panel,
   .meta-grid,
   .language-grid,
   .study-track-tabs,
@@ -745,5 +776,33 @@ h3 {
 
   .character-card {
     grid-template-columns: 1fr;
+  }
+
+  .mode-tabs {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .mode-tabs .tab {
+    min-height: auto;
+    padding: 8px 4px;
+    text-align: center;
+    font-size: 0.72rem;
+    line-height: 1.2;
+  }
+
+  .progress-panel {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .progress-panel > div {
+    padding: 8px;
+  }
+
+  .progress-panel .eyebrow {
+    font-size: 0.6rem;
+  }
+
+  .progress-panel strong {
+    font-size: 1.1rem;
   }
 }

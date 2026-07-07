@@ -266,6 +266,22 @@ function koText(entry) {
   return entry.korean || "한국어 보완 필요";
 }
 
+function isEnPending(entry) {
+  return !entry.english || entry.english === "Meaning not imported yet";
+}
+
+function isCnPending(entry) {
+  return !chineseText(entry);
+}
+
+function isKoPending(entry) {
+  return !entry.korean;
+}
+
+function pendingSpan(text, pending) {
+  return pending ? `<span class="pending-value">${text}</span>` : text;
+}
+
 function triad(entry) {
   return {
     en: enText(entry),
@@ -278,9 +294,9 @@ function languageGrid(entry) {
   const item = triad(entry);
   return `
     <div class="language-grid">
-      <div><span>EN</span><strong>${item.en}</strong></div>
-      <div><span>CN ${state.chineseScript === "traditional" ? "繁" : "简"}</span><strong class="script-text">${item.cn}</strong></div>
-      <div><span>KO</span><strong>${item.ko}</strong></div>
+      <div><span>EN</span><strong>${pendingSpan(item.en, isEnPending(entry))}</strong></div>
+      <div><span>CN ${state.chineseScript === "traditional" ? "繁" : "简"}</span><strong class="script-text">${pendingSpan(item.cn, isCnPending(entry))}</strong></div>
+      <div><span>KO</span><strong>${pendingSpan(item.ko, isKoPending(entry))}</strong></div>
     </div>
   `;
 }
@@ -433,9 +449,9 @@ function renderEntryPage() {
         <h3>Bridge / 连接 / 연결</h3>
         <p class="bridge-line">${entry.bridge}</p>
         <div class="meta-grid">
-          <div class="meta-tile"><span class="eyebrow">EN / English / 영어</span><strong>${enText(entry)}</strong></div>
-          <div class="meta-tile"><span class="eyebrow">CN / 中文 / 중국어</span><strong class="script-text">${cnText(entry)}</strong></div>
-          <div class="meta-tile"><span class="eyebrow">KO / 한국어 / Korean</span><strong>${koText(entry)}</strong></div>
+          <div class="meta-tile"><span class="eyebrow">EN / English / 영어</span><strong>${pendingSpan(enText(entry), isEnPending(entry))}</strong></div>
+          <div class="meta-tile"><span class="eyebrow">CN / 中文 / 중국어</span><strong class="script-text">${pendingSpan(cnText(entry), isCnPending(entry))}</strong></div>
+          <div class="meta-tile"><span class="eyebrow">KO / 한국어 / Korean</span><strong>${pendingSpan(koText(entry), isKoPending(entry))}</strong></div>
         </div>
         <div class="tag-row">${entry.tags.map((tag) => `<span class="tag">${tag}</span>`).join("")}</div>
         <div class="sentence-list">
@@ -459,19 +475,23 @@ function renderEntryPage() {
 }
 
 function characterCard(character) {
+  const rows = [
+    ["Script", state.chineseScript === "traditional" ? "Traditional / 繁體" : "Simplified / 简体"],
+    ["Variant", state.chineseScript === "traditional" ? character.simplified || character.variants || "None" : character.variants || character.char || "None"],
+    ["Radical", character.radical],
+    ["Strokes", character.strokes],
+    ["Grade", character.grade],
+    ["Frequency", character.frequency]
+  ].filter(([, value]) => value);
+
   return `
     <article class="character-card">
       <div class="character-glyph">${characterChineseText(character)}</div>
       <div>
-        <strong>CN ${character.pinyin || "pinyin pending"} · KO ${character.koreanSound || "음 pending"} · EN ${character.meaning || "meaning pending"}</strong>
-        <p>KO ${character.koreanMeaning || "훈 pending"} · CN ${characterChineseText(character)}</p>
+        <strong>CN ${pendingSpan(character.pinyin || "pinyin pending", !character.pinyin)} · KO ${pendingSpan(character.koreanSound || "음 pending", !character.koreanSound)} · EN ${pendingSpan(character.meaning || "meaning pending", !character.meaning)}</strong>
+        <p>KO ${pendingSpan(character.koreanMeaning || "훈 pending", !character.koreanMeaning)} · CN ${characterChineseText(character)}</p>
         <dl>
-          <dt>Script</dt><dd>${state.chineseScript === "traditional" ? "Traditional / 繁體" : "Simplified / 简体"}</dd>
-          <dt>Variant</dt><dd>${state.chineseScript === "traditional" ? character.simplified || character.variants || "None" : character.variants || character.char || "None"}</dd>
-          <dt>Radical</dt><dd>${character.radical}</dd>
-          <dt>Strokes</dt><dd>${character.strokes}</dd>
-          <dt>Grade</dt><dd>${character.grade}</dd>
-          <dt>Frequency</dt><dd>${character.frequency}</dd>
+          ${rows.map(([label, value]) => `<dt>${label}</dt><dd>${value}</dd>`).join("")}
         </dl>
       </div>
     </article>
@@ -483,14 +503,20 @@ function renderDecks() {
     button.classList.toggle("active", button.dataset.track === state.activeTrack);
   });
 
-  const shownDecks = visibleDecks();
+  const shownDecks = visibleDecks().filter((deck) => {
+    if (deck.id === "all" || deck.id === "saved") return true;
+    return studyableEntries(deck.id).length > 0;
+  });
   elements.deckList.innerHTML = shownDecks.map((deck) => {
     const count = studyableEntries(deck.id).length;
+    const description = count > 0 && count < 10
+      ? `${deck.description} Only ${count} word${count === 1 ? "" : "s"} available so far.`
+      : deck.description;
     return `
       <button class="deck-button ${deck.id === state.activeDeck ? "active" : ""}" type="button" data-deck="${deck.id}">
         <span>
           <strong>${deck.name}</strong>
-          ${deck.description}
+          ${description}
         </span>
         <span>${count}</span>
       </button>
@@ -880,3 +906,4 @@ elements.hideConfidentButton.addEventListener("click", () => {
 });
 
 renderAll();
+document.querySelector("#appLoading")?.remove();
